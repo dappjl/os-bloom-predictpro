@@ -69,8 +69,10 @@ Kept:
 
 - The Eurostat `actuals` rules: euro-area HICP flash, core HICP flash, unemployment and GDP.
 - DE 10Y (Bundesbank) and DE 3M (ECB).
-- RISK has the Yahoo rotation ratios.
-- ECON has the two OECD CLI rows.
+- RISK has the Yahoo rotation ratios. Its panel is renamed from "SENTIMENT & ROTATION" to
+  "ROTATION", because the sentiment row (AAII) is gone.
+- ECON has the two OECD CLI rows. Its panel is renamed from "SURVEYS & LEADING" to
+  "LEADING INDICATORS", because the survey rows (ISM, UMich) are gone.
 - POS has CFTC, unchanged.
 
 What changes on screen:

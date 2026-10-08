@@ -114,7 +114,7 @@ cycle_tabs:        # layout only; rows reference cycle_series ids
   - id: risk
     label: RISK
     panels:
-      - title: "SENTIMENT & ROTATION"
+      - title: "ROTATION"
         rows:
           - { series: cyc-def }
           - { series: dax-smi }
@@ -124,7 +124,7 @@ cycle_tabs:        # layout only; rows reference cycle_series ids
   - id: econ
     label: ECON
     panels:
-      - title: "SURVEYS & LEADING"
+      - title: "LEADING INDICATORS"
         rows:
           - { series: oecd-cli-us }
           - { series: oecd-cli-ea }
