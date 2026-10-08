@@ -1,6 +1,7 @@
 from datetime import date
 from pathlib import Path
 
+import yaml
 from fastapi.testclient import TestClient
 
 from collector.api import create_app
@@ -10,9 +11,29 @@ from collector.store import Store
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
-def make_client(tmp_path):
+# PredictPro fork: config.yaml no longer has FRED entries, so the endpoint tests
+# that exercise macro / CB / yoy-transformed cycle series put the upstream rows
+# back into a temporary copy of the config. The code under test is unchanged.
+UPSTREAM_FRED_ROWS = {
+    "bonds": [{"country": "US", "tenor": "3M", "fred": "DGS3MO"}],
+    "cb_rates": [{"country": "US", "label": "FED", "fred": "DFEDTARU"}],
+    "series": [{"id": "us-cpi-yoy", "name": "US CPI YoY %", "fred": "CPIAUCSL",
+                "unit": "%", "transform": "yoy"}],
+    "cycle_series": [{"id": "m2-yoy", "name": "M2 YoY", "unit": "%", "fred": "M2SL",
+                      "transform": "yoy"}],
+}
+
+
+def make_client(tmp_path, upstream_fred_rows=False):
     store = Store(tmp_path / "t.db")
-    cfg = load_config(REPO_ROOT / "config.yaml")
+    path = REPO_ROOT / "config.yaml"
+    if upstream_fred_rows:
+        raw = yaml.safe_load(path.read_text())
+        for key, rows in UPSTREAM_FRED_ROWS.items():
+            raw[key] = list(raw[key]) + rows
+        path = tmp_path / "config.yaml"
+        path.write_text(yaml.safe_dump(raw))
+    cfg = load_config(path)
     return TestClient(create_app(store, cfg)), store
 
 
@@ -24,12 +45,12 @@ def test_dashboard_shape_on_empty_store(tmp_path):
         "fx", "sectors",
     }
     assert [t["id"] for t in body["panels"]["cycle"]["tabs"]] == [
-        "risk", "econ", "credit", "profit", "pos",
+        "risk", "econ", "pos",  # PredictPro fork: CREDIT / PROFIT were all FRED
     ]
 
 
 def test_series_endpoint_applies_transform_and_range(tmp_path):
-    client, store = make_client(tmp_path)
+    client, store = make_client(tmp_path, upstream_fred_rows=True)
     store.upsert_points("macro:us-cpi-yoy", [
         (date(2010, 6, 1), 80.0),
         (date(2025, 6, 1), 100.0),
@@ -81,7 +102,7 @@ def test_series_endpoint_serves_index_symbol(tmp_path):
 
 
 def test_series_endpoint_serves_bond_and_cb_ids(tmp_path):
-    client, store = make_client(tmp_path)
+    client, store = make_client(tmp_path, upstream_fred_rows=True)
     store.upsert_points("yield:US3M", [(date(2026, 7, 8), 3.89)])
     store.upsert_points("cb:US", [(date(2026, 7, 8), 3.75)])
     y3m = client.get("/api/series/US3M?range=max").json()
@@ -156,7 +177,7 @@ def test_corrupted_doc_does_not_500_dashboard(tmp_path):
 
 
 def test_cycle_series_endpoint_applies_transform(tmp_path):
-    client, store = make_client(tmp_path)
+    client, store = make_client(tmp_path, upstream_fred_rows=True)
     store.upsert_points("cycle:m2-yoy", [
         (date(2025, 6, 1), 100.0),
         (date(2026, 6, 1), 106.0),

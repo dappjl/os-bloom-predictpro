@@ -6,9 +6,6 @@ const apy = (x) => (x == null ? "—" : x.toFixed(2));
 // and only link out to http(s) URLs.
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-// Every vault name links to Zyfai rather than deep-linking the underlying
-// protocol (the per-opportunity `url` the API still carries).
-const ZYFAI_URL = "https://www.zyf.ai/";
 
 const median = (xs) => {
   const s = [...xs].sort((a, b) => a - b);
@@ -54,15 +51,13 @@ function renderVaults(panel) {
     if (!groups.has(r.tier)) groups.set(r.tier, []);
     groups.get(r.tier).push(r);
   }
-  const pool = (r) =>
-    `<a class="defi-link" href="${ZYFAI_URL}" target="_blank" rel="noopener">${esc(r.pool)}</a>`;
   const section = (tier, rows) => {
     const { wavg, med } = tierStats(rows);
     return `
     <tr class="tier-head"><td colspan="7">${esc(tier).toUpperCase()}
       <span class="tier-stats">TVL-WTD ${apy(wavg)} · MED ${apy(med)}</span></td></tr>
     ${rows.map((r) => `<tr>
-      <td class="sym">${pool(r)}</td>
+      <td class="sym">${esc(r.pool)}</td>
       <td>${esc(r.protocol)}</td>
       <td>${CHAIN_ABBR[r.chain] ?? esc(r.chain)}</td>
       <td>${apy(r.apy)}</td>

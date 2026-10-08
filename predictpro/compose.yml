@@ -1,0 +1,23 @@
+name: osbloom
+services:
+  collector:
+    image: osbloom-collector:predictpro-<commit>
+    restart: unless-stopped
+    env_file: .env
+    volumes: ["./data:/data", "./config.yaml:/app/config.yaml:ro"]
+    user: "108:113"            # the box's osbloom account; adjust to `id osbloom`
+    read_only: true
+    tmpfs: ["/tmp"]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 256m
+    logging: { driver: json-file, options: { max-size: "10m", max-file: "3" } }
+  ui:
+    image: osbloom-ui:predictpro-<commit>
+    restart: unless-stopped
+    depends_on: [collector]
+    ports: ["127.0.0.1:3130:80"]
+    read_only: true
+    tmpfs: ["/var/cache/nginx", "/var/run", "/tmp"]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 64m
+    logging: { driver: json-file, options: { max-size: "10m", max-file: "3" } }

@@ -11,17 +11,16 @@ def test_load_real_config():
     spx = cfg.indexes[0]
     assert (spx.symbol, spx.yahoo) == ("SPX", "^GSPC")
     assert spx.yahoo == "^GSPC"
-    assert {b.country for b in cfg.bonds} == {"US", "DE"}
-    us = next(b for b in cfg.bonds if b.country == "US")
-    assert us.fred == "DGS10"
+    # PredictPro fork: no FRED, so no US bond rows
+    assert {b.country for b in cfg.bonds} == {"DE"}
+    assert not any(b.fred for b in cfg.bonds) and cfg.cb_rates == []
     de = next(b for b in cfg.bonds if b.country == "DE")
     assert de.bundesbank == "D.I.ZST.ZI.EUR.S1311.B.A604.R10XX.R.A.A._Z._Z.A"
     assert not any(b.country == "UK" for b in cfg.bonds)  # no keyless gilt source
     assert cfg.cadences["equity"] == 300
     assert cfg.max_news == 15
-    ids = [s.id for s in cfg.series]
-    assert "us-cpi-yoy" in ids and "ez-hicp-yoy" in ids
-    assert cfg.calendar_map[0].match == "Core CPI"  # order preserved
+    assert cfg.series == []        # PredictPro fork: every macro chart series was FRED
+    assert cfg.calendar_map == []
     assert cfg.feeds[0].name == "FT"
 
 
@@ -93,23 +92,22 @@ def test_cycle_config():
     cfg = load_config(REPO_ROOT / "config.yaml")
     assert cfg.cadences["cycle"] == 86400
     by_id = {s.id: s for s in cfg.cycle_series}
-    assert by_id["vix"].fred == "VIXCLS"
-    assert by_id["usrec"].hidden is True
-    assert by_id["ism-pmi"].dbnomics == "ISM/pmi/pm"
+    # PredictPro fork: no FRED series and none of the third-party series
+    removed = {"usrec", "vix", "vxn", "pc-total", "pc-equity", "aaii-spread", "ism-pmi", "ism-svc",
+               "umich", "ig-oas", "hy-oas", "eu-hy-oas", "bbb-oas", "ccc-oas", "m2-yoy", "usd-broad"}
+    assert not removed & set(by_id)
+    assert not any(s.fred or s.dbnomics or s.cboe or s.aaii for s in cfg.cycle_series)
     assert by_id["oecd-cli-us"].oecd.endswith("/USA.M.LI...AA...H")
     assert by_id["cot-vix"].cftc == "1170E1"
-    assert by_id["pc-total"].cboe == "TOTAL PUT/CALL RATIO"
-    assert by_id["aaii-spread"].aaii == "bull_bear_spread"
     assert by_id["spw-spx"].yahoo_ratio == ["RSP", "SPY"]
-    assert by_id["m2-yoy"].transform == "yoy"
-    assert by_id["vix"].transform == "none"  # default
+    assert by_id["cot-vix"].transform == "none"  # default
     # every source entry has exactly one source key
     for s in cfg.cycle_series:
         sources = [s.fred, s.dbnomics, s.oecd, s.cftc, s.cboe, s.aaii, s.yahoo_ratio]
         assert sum(x is not None for x in sources) == 1, s.id
     # every tab row references an existing series; overlays too
     tabs = {t.id: t for t in cfg.cycle_tabs}
-    assert list(tabs) == ["risk", "econ", "credit", "profit", "pos"]
+    assert list(tabs) == ["risk", "econ", "pos"]  # PredictPro fork: CREDIT / PROFIT were all FRED
     for t in cfg.cycle_tabs:
         assert t.label == t.id.upper()
         for p in t.panels:
@@ -123,28 +121,19 @@ def test_actuals_rules():
     cfg = load_config(REPO_ROOT / "config.yaml")
     assert cfg.cadences["actuals"] == 600
     rules = cfg.actuals
-    assert len(rules) == 18
+    assert len(rules) == 4  # PredictPro fork: only the Eurostat rules remain
+    assert all(r.fred is None for r in rules)
     for r in rules:
         assert (r.fred is None) != (r.eurostat is None), r.match
         assert r.calc in ("level", "pct_prev", "pct_yoy", "diff_k")
         assert r.fmt in ("pct1", "pct2", "k") and r.freq in ("m", "q", "d")
     # first match wins, so the core rules must precede the headline ones
     names = [(r.country, r.match) for r in rules]
-    assert names.index(("USD", "Core CPI m/m")) < names.index(("USD", "CPI m/m"))
     assert names.index(("EUR", "Core CPI Flash Estimate y/y")) < names.index(("EUR", "CPI Flash Estimate y/y"))
-    assert names.index(("USD", "Core Retail Sales m/m")) < names.index(("USD", "Retail Sales m/m"))
-    nfp = next(r for r in rules if r.match == "Non-Farm Employment Change")
-    assert nfp.exclude == ["ADP"]
-    assert next(r for r in rules if r.match == "CPI y/y").fred == "CPIAUCNS"   # y/y is printed NSA
-    assert next(r for r in rules if r.match == "CPI m/m").fred == "CPIAUCSL"   # m/m is printed SA
     eu_gdp = next(r for r in rules if r.country == "EUR" and r.match == "GDP q/q")
     assert "German" in eu_gdp.exclude and eu_gdp.freq == "q"
-    nfp = next(r for r in rules if r.match == "Non-Farm Employment Change")
-    assert nfp.calc == "diff_k" and nfp.fmt == "k"
     eu_unemp = next(r for r in rules if r.country == "EUR" and r.match == "Unemployment Rate")
     assert eu_unemp.lag == 2 and eu_unemp.eurostat.startswith("une_rt_m?")
-    fed = next(r for r in rules if r.match == "Federal Funds Rate")
-    assert fed.freq == "d" and fed.fmt == "pct2" and fed.lag == 1
 
 
 def test_fx_and_sectors_config():
